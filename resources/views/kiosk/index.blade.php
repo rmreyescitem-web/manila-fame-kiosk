@@ -2,22 +2,34 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Interactive FAME+ Floor Plan Kiosk</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <style>
+        /* Lock down zoom for headers, footers, and floating modals */
+        header, footer, .fixed-ui-lock {
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* Allow zoom and smooth scrolling strictly on the main map content body */
+        body {
+            touch-action: pan-x pan-y pinch-zoom;
+        }
+
         /* Exact Spreadsheet Grid Dimensions (39 columns A to AM, 49 rows) */
         .floor-grid {
             display: grid;
             grid-template-columns: repeat(39, minmax(36px, 1fr));
             grid-template-rows: repeat(49, minmax(36px, 1fr));
             gap: 3px;
-            background-color: #cbd5e1;
+            background-color: #cbd5e1; /* Light Slate Grid Track */
             padding: 24px;
             border-radius: 1rem;
-            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+            box-shadow: inset 0 2px 6px 0 rgba(0, 0, 0, 0.05);
             position: relative;
         }
         /* Custom smooth scrollbar */
@@ -36,9 +48,9 @@
             background: #94a3b8;
         }
         @keyframes pulse-ring {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5); }
-            70% { transform: scale(1); box-shadow: 0 0 0 14px rgba(37, 99, 235, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(219, 39, 119, 0.4); }
+            70% { transform: scale(1); box-shadow: 0 0 0 14px rgba(219, 39, 119, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(219, 39, 119, 0); }
         }
         .booth-active-pulse {
             animation: pulse-ring 2s infinite;
@@ -52,102 +64,48 @@
         }
     </style>
 </head>
-<body class="bg-slate-100 font-sans antialiased h-screen flex flex-col overflow-hidden select-none" x-data="kioskApp()">
-
-    <!-- Modern Clean Light Header -->
-    <header class="bg-white/90 backdrop-blur-md border-b border-slate-200 text-slate-800 px-6 py-4 flex justify-between items-center z-30 shadow-sm">
-        <div class="flex items-center space-x-4">
-            <div class="bg-blue-600 p-2.5 rounded-xl shadow-md shadow-blue-500/20 text-white">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
-                </svg>
-            </div>
-            <div>
-                <h1 class="text-lg font-bold tracking-wider text-slate-900">EVENT FLOOR PLAN</h1>
-                <p class="text-xs text-slate-500">Interactive Directory & Wayfinding</p>
-            </div>
-        </div>
-
-        <!-- Start from Main Entrance Button -->
-        <div>
-            <button @click="resetToEntrance" class="flex items-center space-x-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-emerald-500/20 transition-all transform active:scale-95">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-                <span>Main Entrance View</span>
-            </button>
-        </div>
-
-        <!-- Search Bar -->
-        <div class="relative w-1/3">
-            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-            </div>
-            <input 
-                type="text" 
-                x-model="searchQuery" 
-                @input.debounce.300ms="searchBooth"
-                placeholder="Search booth (e.g., L-19, Artisans Village)..." 
-                class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-inner"
-            >
-            <!-- Search Results Dropdown -->
-            <div x-show="searchResults.length > 0" class="absolute left-0 right-0 mt-2 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-xl max-h-72 overflow-y-auto z-50 divide-y divide-slate-100">
-                <template x-for="item in searchResults" :key="item.id">
-                    <div class="p-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-colors">
-                        <div>
-                            <span class="font-bold text-sm text-blue-600 block" x-text="item.booth_code"></span>
-                            <span class="text-slate-500 text-xs" x-text="item.section"></span>
-                        </div>
-                        <button @click="navigateToBooth(item)" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow transition-transform active:scale-95">
-                            Get Directions
-                        </button>
-                    </div>
-                </template>
-            </div>
-        </div>
-    </header>
+<body class="bg-slate-100 font-sans antialiased h-screen flex flex-col overflow-hidden select-none text-slate-800" x-data="kioskApp()">
 
     <!-- Main Map Viewport -->
-    <main id="mapContainer" class="flex-1 overflow-auto p-8 bg-slate-100 relative flex justify-center items-start">
-        <div class="floor-grid border border-slate-300 shadow-lg relative" id="floorGridElement">
+    <main id="mapContainer" class="flex-1 overflow-auto p-8 bg-slate-200 relative flex justify-center items-start">
+        <div class="floor-grid border border-slate-300 shadow-xl relative" id="floorGridElement">
             
             <!-- SVG Wayfinding Path Layer Overlay -->
             <svg class="absolute inset-0 w-full h-full pointer-events-none z-30" id="wayfindingSvg" style="display: none;">
                 <defs>
                     <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-                        <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#2563eb" flood-opacity="0.3"/>
+                        <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#db2777" flood-opacity="0.3"/>
                     </filter>
                     <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                        <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb"/>
+                        <path d="M 0 1 L 10 5 L 0 9 z" fill="#db2777"/>
                     </marker>
                 </defs>
                 <!-- Wayfinding Aisles Routing Path -->
-                <path id="routePath" d="" fill="none" stroke="#2563eb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" class="path-animated" marker-end="url(#arrow)" />
+                <path id="routePath" d="" fill="none" stroke="#db2777" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" class="path-animated" marker-end="url(#arrow)" />
             </svg>
 
             @php
-                function excelColToInt($colStr) {
-                    $colStr = strtoupper($colStr);
-                    $length = strlen($colStr);
-                    $num = 0;
-                    for ($i = 0; $i < $length; $i++) {
-                        $num = $num * 26 + (ord($colStr[$i]) - ord('A') + 1);
+                function excelColToInt($colStr) {$colStr = strtoupper($colStr);$len = strlen($colStr);$num = 0;
+                    for ($i = 0; $i < $len; $i++) {
+                        $num =$num * 26 + (ord($colStr[$i]) - ord('A') + 1);
                     }
                     return $num;
                 }
 
-                function getGridStyle($startCell, $endCell = null) {
-                    if (empty($startCell) || !preg_match('/([A-Z]+)(\d+)/', trim($startCell), $startMatches)) {
+                function getGridStyle($startCell,$endCell = null) {
+                    if (empty($startCell) || !preg_match('/([A-Z]+)(\d+)/', trim($startCell),$startMatches)) {
                         return 'display: none;';
                     }
 
                     $startCol = excelColToInt($startMatches[1]);
                     $startRow = intval($startMatches[2]);
 
-                    if ($endCell && preg_match('/([A-Z]+)(\d+)/', trim($endCell), $endMatches)) {
+                    if ($endCell && preg_match('/([A-Z]+)(\d+)/', trim($endCell),$endMatches)) {
                         $endCol = excelColToInt($endMatches[1]) + 1; 
                         $endRow = intval($endMatches[2]) + 1;
                     } else {
-                        $endCol = $startCol + 1;
-                        $endRow = $startRow + 1;
+                        $endCol =$startCol + 1;
+                        $endRow =$startRow + 1;
                     }
 
                     return "grid-column: {$startCol} / {$endCol}; grid-row: {$startRow} / {$endRow};";
@@ -157,16 +115,32 @@
             @foreach($booths as $booth)
                 @php
                     $isMainEntrance = (stripos($booth->booth_code, 'MAIN ENTRANCE') !== false);
+                    $sec = strtolower($booth->section ?? '');
+                    
+                    $boothColorClass =$booth->is_merged 
+                        ? 'bg-indigo-50 text-indigo-900 font-bold border-indigo-200 hover:bg-indigo-100' 
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300';
+
+                    if ($isMainEntrance) {$boothColorClass = 'bg-teal-600 text-white font-bold border-teal-500 shadow-teal-500/20';
+                    } elseif (str_contains($sec, 'furniture')) {$boothColorClass = 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200';
+                    } elseif (str_contains($sec, 'furnishing')) {$boothColorClass = 'bg-sky-100 text-sky-900 border-sky-300 hover:bg-sky-200';
+                    } elseif (str_contains($sec, 'holiday')) {$boothColorClass = 'bg-sky-100 text-sky-900 border-sky-300 hover:bg-sky-200';
+                    } elseif (str_contains($sec, 'decor')) {$boothColorClass = 'bg-sky-100 text-sky-900 border-sky-300 hover:bg-sky-200';
+                    } elseif (str_contains($sec, 'fashion')) {$boothColorClass = 'bg-rose-100 text-rose-900 border-rose-300 hover:bg-rose-200';
+                    } elseif (str_contains($sec, 'apparel')) {$boothColorClass = 'bg-rose-100 text-rose-900 border-rose-300 hover:bg-rose-200';
+                    } elseif (str_contains($sec, 'artisan')) {$boothColorClass = 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200';
+                    } elseif (str_contains($sec, 'village')) {$boothColorClass = 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200';
+                    }
                 @endphp
                 <div 
                     id="booth-{{ $booth->id }}"
                     data-code="{{ strtoupper($booth->booth_code) }}"
                     data-start="{{ $booth->start_cell }}"
                     class="booth-tile border text-[10px] text-center flex items-center justify-center font-semibold rounded-lg transition-all duration-300 select-none cursor-pointer shadow-sm"
-                    style="{{ getGridStyle($booth->start_cell, $booth->end_cell) }}"
+                    style="{{ getGridStyle($booth->start_cell,$booth->end_cell) }}"
                     :class="{
-                        'bg-blue-600 text-white scale-105 shadow-xl ring-4 ring-blue-300 z-40 booth-active-pulse': activeBoothId === {{ $booth->id }},
-                        '{{ $isMainEntrance ? 'bg-emerald-600 text-white font-bold border-emerald-500 shadow-emerald-500/20' : ($booth->is_merged ? 'bg-amber-100 text-amber-900 font-bold border-amber-300 hover:bg-amber-200' : 'bg-white hover:bg-blue-50 text-slate-700 border-slate-300') }}': true
+                        'bg-pink-600 text-white scale-105 shadow-lg ring-4 ring-pink-300 z-40 booth-active-pulse': activeBoothId === {{ $booth->id }},
+                        '{{ $boothColorClass }}': activeBoothId !== {{$booth->id }}
                     }"
                     @click="selectBoothFromMap({{ $booth->id }}, '{{ addslashes($booth->booth_code) }}', '{{ addslashes($booth->section) }}')"
                 >
@@ -176,23 +150,81 @@
         </div>
     </main>
 
+    <!-- Modern Clean Header / Control Bar -->
+    <header class="bg-white/95 backdrop-blur-md border-b border-slate-200 text-slate-800 px-6 py-4 flex justify-between items-center z-30 shadow-sm">
+        <!-- Left: Manila FAME Logo & Title -->
+        <div class="flex items-center space-x-4">
+            <div class="bg-slate-50 p-1.5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-center">
+                <img src="{{ asset('images/manila_fame_logo_black.jpg') }}" alt="Manila FAME Logo" class="h-9 w-auto object-contain pointer-events-none">
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-wider text-slate-900">EVENT FLOOR PLAN</h1>
+                <p class="text-xs text-slate-500">Interactive Directory & Wayfinding</p>
+            </div>
+        </div>
+
+        <!-- Center: Search Bar & Entrance View Button -->
+        <div class="flex items-center space-x-4 w-1/2 justify-center relative">
+            <!-- Start from Main Entrance Button -->
+            <button @click="resetToEntrance" class="flex items-center space-x-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white px-4 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-teal-600/20 transition-all transform active:scale-95 whitespace-nowrap border border-teal-500">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                <span>Main Entrance</span>
+            </button>
+
+            <!-- Search Bar -->
+            <div class="relative w-full max-w-md">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <input 
+                    type="text" 
+                    x-model="searchQuery" 
+                    @input.debounce.300ms="searchBooth"
+                    placeholder="Search booth (e.g., L-19, Artisans Village)..." 
+                    class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all shadow-inner"
+                >
+                <!-- Search Results Dropdown -->
+                <div x-show="searchResults.length > 0" class="absolute left-0 right-0 bottom-full mb-2 bg-white border border-slate-200 text-slate-800 rounded-xl shadow-xl max-h-72 overflow-y-auto z-50 divide-y divide-slate-100">
+                    <template x-for="item in searchResults" :key="item.id">
+                        <div class="p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center transition-colors">
+                            <div>
+                                <span class="font-bold text-sm text-pink-600 block" x-text="item.booth_code"></span>
+                                <span class="text-slate-500 text-xs" x-text="item.section"></span>
+                            </div>
+                            <button @click="navigateToBooth(item)" class="bg-pink-600 hover:bg-pink-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow transition-transform active:scale-95">
+                                Get Directions
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: DTI-CITEM Colored Logo -->
+        <div class="flex items-center">
+            <div class="bg-slate-50 p-1.5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-center">
+                <img src="{{ asset('images/dti-citem-colored-logo.png') }}" alt="DTI-CITEM Logo" class="h-9 w-auto object-contain pointer-events-none">
+            </div>
+        </div>
+    </header>
+
     <!-- Floating Wayfinding & Direction Panel -->
-    <div x-show="selectedBoothInfo" x-transition class="absolute bottom-6 left-6 bg-white/95 backdrop-blur-md border border-slate-200 text-slate-800 p-5 rounded-2xl shadow-xl z-40 max-w-sm flex items-start space-x-4">
-        <div class="bg-blue-50 border border-blue-200 p-3 rounded-xl mt-1 text-blue-600">
+    <div x-show="selectedBoothInfo" x-transition class="absolute bottom-24 left-6 bg-white/95 backdrop-blur-md border border-slate-200 text-slate-800 p-5 rounded-2xl shadow-xl z-40 max-w-sm flex items-start space-x-4 fixed-ui-lock">
+        <div class="bg-slate-100 border border-slate-200 p-3 rounded-xl mt-1 text-pink-600">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
         </div>
         <div class="flex-1">
             <div class="flex justify-between items-start">
-                <span class="text-xs text-blue-600 font-semibold uppercase tracking-wider">Wayfinding Route</span>
-                <span class="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium">From Main Entrance</span>
+                <span class="text-xs text-pink-600 font-semibold uppercase tracking-wider">Wayfinding Route</span>
+                <span class="text-[10px] bg-teal-100 text-teal-800 border border-teal-200 px-2 py-0.5 rounded-full font-medium">From Main Entrance</span>
             </div>
             <h4 class="text-base font-bold text-slate-900 mt-0.5" x-text="selectedBoothInfo?.code"></h4>
             <p class="text-xs text-slate-500" x-text="selectedBoothInfo?.section"></p>
             <div class="mt-3 pt-3 border-t border-slate-100 flex space-x-2">
-                <button @click="drawRouteToActive()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-1.5 px-3 rounded-lg text-xs font-semibold shadow transition">
+                <button @click="drawRouteToActive()" class="flex-1 bg-pink-600 hover:bg-pink-500 text-white py-1.5 px-3 rounded-lg text-xs font-semibold shadow transition">
                     Show Path
                 </button>
-                <button @click="clearRoute()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 px-3 rounded-lg text-xs font-semibold transition">
+                <button @click="clearRoute()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 px-3 rounded-lg text-xs font-semibold transition border border-slate-200">
                     Clear Path
                 </button>
             </div>
@@ -202,16 +234,7 @@
         </button>
     </div>
 
-    <!-- Modern Clean Footer -->
-    <footer class="bg-white/90 backdrop-blur-md border-t border-slate-200 text-center py-3 text-xs text-slate-500 z-30 flex justify-between px-6 items-center">
-        <span>Interactive Event Floor Plan Kiosk</span>
-        <span class="flex items-center space-x-1.5 text-emerald-600 font-medium">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Wayfinding Navigation Active</span>
-        </span>
-    </footer>
-
-<!-- AlpineJS & Wayfinding Logic -->
+    <!-- AlpineJS & Wayfinding Logic -->
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('kioskApp', () => ({
@@ -221,10 +244,8 @@
                 selectedBoothInfo: null,
 
                 init() {
-                    // 1. Disable Right Click Context Menu
                     document.addEventListener('contextmenu', event => event.preventDefault());
 
-                    // 2. Disable DevTools & Inspect Keyboard Shortcuts
                     document.addEventListener('keydown', event => {
                         if (
                             event.key === 'F12' ||
@@ -236,7 +257,6 @@
                         }
                     });
 
-                    // 3. Disable Browser Touch Swiping Left/Right
                     let touchStartX = 0;
                     document.addEventListener('touchstart', e => {
                         touchStartX = e.changedTouches[0].screenX;
@@ -249,13 +269,11 @@
                         }
                     }, {passive: false});
 
-                    // 4. Trap History Stack
                     history.pushState(null, null, location.href);
                     window.addEventListener('popstate', () => {
                         history.pushState(null, null, location.href);
                     });
 
-                    // Start default view centered at Main Entrance
                     setTimeout(() => {
                         this.resetToEntrance();
                     }, 500);
@@ -311,9 +329,9 @@
                             block: 'center',
                             inline: 'center'
                         });
-                        mainEntranceEl.classList.add('ring-4', 'ring-emerald-400', 'scale-105');
+                        mainEntranceEl.classList.add('ring-4', 'ring-teal-400', 'scale-105');
                         setTimeout(() => {
-                            mainEntranceEl.classList.remove('ring-4', 'ring-emerald-400', 'scale-105');
+                            mainEntranceEl.classList.remove('ring-4', 'ring-teal-400', 'scale-105');
                         }, 2500);
                     }
                 },
@@ -337,10 +355,7 @@
                     const endX = (endRect.left + endRect.width / 2) - gridRect.left;
                     const endY = (endRect.top + endRect.height / 2) - gridRect.top;
 
-                    // Updated Aisle-Aware Orthogonal Routing:
-                    // Route upwards through open vertical corridors, jog across clear horizontal lanes, 
-                    // and approach the destination cleanly through aisle gaps.
-                    const corridorY = Math.min(startY, endY) - 25; // Route up into the top aisle channel
+                    const corridorY = Math.min(startY, endY) - 25; 
                     const pathData = `M ${startX} ${startY} L ${startX} ${corridorY} L ${endX} ${corridorY} L ${endX} ${endY}`;
 
                     const routePath = document.getElementById('routePath');
