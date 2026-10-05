@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
@@ -11,8 +12,13 @@ class KioskController extends Controller
      */
     public function index()
     {
-        $booths = Booth::all();
-        return view('kiosk.index', compact('booths'));
+        // Fetch regular booths, facilities, entrances, and aisles
+        $booths = Booth::where('type', '!=', 'wall')->get();
+
+        // Fetch structural walls separately to populate the wall layer
+        $walls = Booth::where('type', 'wall')->get();
+
+        return view('kiosk.index', compact('booths', 'walls'));
     }
 
     /**
@@ -26,8 +32,11 @@ class KioskController extends Controller
 
         $query = strtoupper(trim($request->input('query')));
 
-        $booths = Booth::where('booth_code', 'LIKE', "%{$query}%")
-                    ->orWhere('section', 'LIKE', "%{$query}%")
+        $booths = Booth::where('type', '!=', 'wall')
+                    ->where(function($q) use ($query) {
+                        $q->where('booth_code', 'LIKE', "%{$query}%")
+                          ->orWhere('section', 'LIKE', "%{$query}%");
+                    })
                     ->get();
 
         if ($booths->isEmpty()) {
